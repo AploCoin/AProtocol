@@ -6,7 +6,7 @@
 //! cargo run -p manual-p2p
 //! ```
 
-use std::time::Duration;
+use std::{clone, time::Duration};
 
 use futures::StreamExt;
 use once_cell::sync::Lazy;
@@ -18,19 +18,47 @@ use reth_eth_wire::{
 };
 use reth_network::config::rng_secret_key;
 use reth_network_peers::{mainnet_nodes, pk2id, NodeRecord};
-use reth_primitives::{EthereumHardfork, Head, MAINNET_GENESIS_HASH};
+use reth_primitives::{
+    alloy_primitives::B512, hex::FromHex as _, EthereumHardfork, Head, MAINNET_GENESIS_HASH,
+};
 use secp256k1::{SecretKey, SECP256K1};
 use tokio::net::TcpStream;
 
 type AuthedP2PStream = P2PStream<ECIESStream<TcpStream>>;
 type AuthedEthStream = EthStream<P2PStream<ECIESStream<TcpStream>>>;
 
-pub static MAINNET_BOOT_NODES: Lazy<Vec<NodeRecord>> = Lazy::new(mainnet_nodes);
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    str::FromStr,
+};
+
+mod config_env;
+use crate::config_env::*;
+
+fn mainnet_nodes_test() -> Vec<NodeRecord> {
+    if BOOT_NODE_IP.is_some() &&
+        BOOT_NODE_TCP_PORT.is_some() &&
+        BOOT_NODE_ID.is_some() &&
+        BOOT_NODE_UDP_PORT.is_some()
+    {
+        vec![NodeRecord {
+            address: BOOT_NODE_IP.unwrap(),
+            tcp_port: BOOT_NODE_TCP_PORT.unwrap(),
+            udp_port: BOOT_NODE_UDP_PORT.unwrap(),
+            id: B512::from_hex(BOOT_NODE_ID.as_ref().unwrap()).unwrap(),
+        }]
+    } else {
+        Vec::with_capacity(0)
+    }
+}
+
+pub static MAINNET_BOOT_NODES: Lazy<Vec<NodeRecord>> = Lazy::new(mainnet_nodes_test);
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
+    print_config();
     // Setup configs related to this 'node' by creating a new random
-    let our_key = rng_secret_key();
+    let our_key = SecretKey::from_str(&PRIVATE_KEY).unwrap();
     let our_enr = NodeRecord::from_secret_key(DEFAULT_DISCOVERY_ADDRESS, &our_key);
 
     // Setup discovery v4 protocol to find peers to talk to
@@ -44,33 +72,35 @@ async fn main() -> eyre::Result<()> {
     while let Some(update) = discv4_stream.next().await {
         tokio::spawn(async move {
             if let DiscoveryUpdate::Added(peer) = update {
+                println!("New node: {:?}", peer);
                 // Boot nodes hard at work, lets not disturb them
                 if MAINNET_BOOT_NODES.contains(&peer) {
                     return
                 }
 
-                let (p2p_stream, their_hello) = match handshake_p2p(peer, our_key).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        println!("Failed P2P handshake with peer {}, {}", peer.address, e);
-                        return
-                    }
-                };
+                //let (p2p_stream, their_hello) = match handshake_p2p(peer, our_key).await {
+                //    Ok(s) => s,
+                //    Err(e) => {
+                //        println!("Failed P2P handshake with peer {}, {}", peer.address, e);
+                //        return
+                //    }
+                //};
 
-                let (eth_stream, their_status) = match handshake_eth(p2p_stream).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        println!("Failed ETH handshake with peer {}, {}", peer.address, e);
-                        return
-                    }
-                };
+                //let (eth_stream, their_status) = match handshake_eth(p2p_stream).await {
+                //    Ok(s) => s,
+                //    Err(e) => {
+                //        println!("Failed ETH handshake with peer {}, {}", peer.address, e);
+                //        return
+                //    }
+                //};
 
-                println!(
-                    "Successfully connected to a peer at {}:{} ({}) using eth-wire version eth/{}",
-                    peer.address, peer.tcp_port, their_hello.client_version, their_status.version
-                );
+                //println!(
+                //    "Successfully connected to a peer at {}:{} ({}) using eth-wire version
+                // eth/{}",    peer.address, peer.tcp_port,
+                // their_hello.client_version, their_status.version
+                //);
 
-                snoop(peer, eth_stream).await;
+                //snoop(peer, eth_stream).await;
             }
         });
     }
@@ -83,6 +113,7 @@ async fn handshake_p2p(
     peer: NodeRecord,
     key: SecretKey,
 ) -> eyre::Result<(AuthedP2PStream, HelloMessage)> {
+    println!("Peer: {:?}", peer);
     let outgoing = TcpStream::connect((peer.address, peer.tcp_port)).await?;
     let ecies_stream = ECIESStream::connect(outgoing, key, peer.id).await?;
 

@@ -1,0 +1,47 @@
+services:
+  boot-node:
+    image: reth-example
+    ports:
+      - "30303"
+    networks:
+      nodes:
+        ipv4_address: 10.5.0.5
+    environment:
+       PRIVATE_KEY: "301c1685c4fb41cc3d9225a7e736ac3ffb481e7d940009160504374d04ea315a"
+
+  node-1:
+    image: reth-example
+    ports:
+      - "30303"
+    networks:
+      nodes:
+        ipv4_address: 10.5.0.6
+    environment:
+       BOOT_NODE_IP: "10.5.0.5"
+       BOOT_NODE_TCP_PORT: "30303"
+       BOOT_NODE_UDP_PORT: "30303"
+       BOOT_NODE_ID: "e7a4d9342a486d2710a70057385145bedd0b73be6fd381619571d12f286901298b23c6f891828bdc932b73c634a2093602f4bfca3fa78d1b00d8435e9e14e803"
+
+  node-2:
+    image: reth-example
+    ports:
+      - "30303"
+    networks:
+      nodes:
+        ipv4_address: 10.5.0.7
+    environment:
+       BOOT_NODE_IP: "10.5.0.5"
+       BOOT_NODE_TCP_PORT: "30303"
+       BOOT_NODE_UDP_PORT: "30303"
+       BOOT_NODE_ID: "e7a4d9342a486d2710a70057385145bedd0b73be6fd381619571d12f286901298b23c6f891828bdc932b73c634a2093602f4bfca3fa78d1b00d8435e9e14e803"
+
+
+
+
+networks:
+  nodes:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.5.0.0/16
+         gateway: 10.5.0.1
