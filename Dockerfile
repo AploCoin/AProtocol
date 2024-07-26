@@ -10,8 +10,8 @@ WORKDIR /app
 
 COPY ./ ./
 
-RUN cargo build --release --manifest-path  ./examples/manual-p2p/Cargo.toml
+RUN cargo build --release --manifest-path  ./AploNode/Cargo.toml
 
 EXPOSE 30303
 
-CMD ["./target/release/example-manual-p2p"]
+CMD ["./target/release/aplo-node"]
